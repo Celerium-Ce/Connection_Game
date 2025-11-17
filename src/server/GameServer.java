@@ -160,4 +160,129 @@ class GameServer{
     }
 
     // functions for connections and hints
+
+    public synchronized void startHint(String hinter, String hint, String intendedW){
+        if (!gameState.isHintPhaseAllowed()){
+            sendTo(hinter, "TYPE:ERROR\nMSG:Hint not allowed in current phase");
+            return;
+        }
+        gameState.setPendingHint(hinter, hint, intendedW);
+        gameState.addHistory("---");
+        gameState.addHistory("HINT STARTED by " + hinter);
+        gameState.addHistory("Public Hint: \"" + hint + "\"");
+        gameState.addHistory("(Intended word hidden from A - Timeout: 120s)");
+        broadcast("TYPE:HINT_STARTED\nGIVER:" + hinter + "\nHINT:" + hint + "\nTIME:120");
+        broadcastState();
+
+        timerManager.scheduleHintTimeout(hinter);
+    }
+
+    public synchronized void requestConnect(String requester){
+        if (!gameState.isHintActive()){
+            sendTo(requester, "TYPE:ERROR\nMSG:No active hint");
+            return;
+        }
+        if (gameState.isConnectionWindowOpen()){
+            sendTo(requester, "TYPE:ERROR\nMSG:Connection already in progress");
+            return;
+        }
+        // add to gamelogs
+        gameState.setConnectionRequester(requester); 
+        gameState.addHistory(">> CONNECTION ATTEMPT by " + requester);
+        gameState.addHistory("Connection Window: 10 seconds");
+        gameState.addHistory("Both A and " + requester + " must submit guesses!");
+        broadcast("TYPE:CONNECTION_WINDOW\nB2:" + requester + "\nTIME:10");
+        broadcastState();
+        // start timer for connection window
+        timerManager.scheduleConnectionWindow(requester);
+    }
+
+    public synchronized void submitGuess(String who, String guess){
+        // store guess
+        gameState.putGuess(who, guess);
+        gameState.addHistory(who + " submitted guess (masked).");
+        broadcastState();
+
+        // if A and B2 has both guessed, check
+        if (gameState.isConnectionReadyToResolve()){
+            timerManager.cancelConnectionTimer();
+            resolveConnection();
+        }
+    }
+
+    public synchronized void resolveConnection(){
+        // Gather data
+        String b1 = gameState.getPendingHintGiver();
+        String intended = gameState.getPendingIntended();
+        String b2 = gameState.getConnectionRequester();
+        String aPlayer = gameState.getActivePlayer();
+        String b2Guess = gameState.getGuess(b2);
+        String aGuess = gameState.getGuess(aPlayer);
+        String secret = gameState.getSecret();
+
+        gameState.addHistory("RESOLVING CONNECTION...");
+
+        // check win condition
+        if ((intended != null && intended.equalsIgnoreCase(secret)) || (b2Guess != null && b2Guess.equalsIgnoreCase(secret))){
+            gameState.addHistory("=== GAME OVER ===");
+            gameState.addHistory("WINNER: B (Attackers)");
+            gameState.addHistory("Secret word guessed directly: " + secret);
+            broadcast("TYPE:GAME_OVER\nWINNER:B\nMSG:Secret guessed via connection attempt");
+            gameState.setGameOver(true);
+            clearHintAndConnection();
+            broadcastState();
+            return;
+        }
+
+        // A guesses intended Z        
+        if (aGuess != null && intended != null && aGuess.equalsIgnoreCase(intended)){
+            gameState.loseLife();
+            broadcast("TYPE:LIFE_LOST\nREMAINING:" + gameState.getLives());
+            gameState.addHistory("✗ A guessed intended word correctly!");
+            gameState.addHistory("PENALTY: Lost 1 life (Remaining: " + gameState.getLives() +")");
+            if (gameState.getLives() <= 0){
+                gameState.addHistory("=== GAME OVER ===");
+                gameState.addHistory("WINNER: A (Defender)");
+                gameState.addHistory("B team lost all lives on prefix: " + gameState.getPrefix());
+                broadcast("TYPE:GAME_OVER\nWINNER:A\nMSG:B lost all lives on same prefix");
+                gameState.setGameOver(true);
+                broadcastState();
+                return;
+            }
+            // continue with same prefix
+            gameState.addHistory("Game continues with same prefix: " + gameState.getPrefix());
+            clearHintAndConnection();
+            broadcastState();
+            return;
+        }
+
+        // A didn't guess intended.
+        // If b2 guessed intended -> reveal next letter
+        if (b2Guess != null && intended != null && b2Guess.equalsIgnoreCase(intended)){
+            gameState.revealNextLetter();
+            gameState.resetLives();
+            broadcast("TYPE:CONNECTION_SUCCESS\nNEW_PREFIX:" + gameState.getPrefix() + "\nLIVES:5");
+            gameState.addHistory("✓ CONNECTION SUCCESS!");
+            gameState.addHistory("" + b2 + " guessed the intended word correctly!");
+            gameState.addHistory("NEW PREFIX: " + gameState.getPrefix() + " | Lives reset to 5");
+            if (gameState.isSecretFullyRevealed()){
+                gameState.addHistory("=== GAME OVER ===");
+                gameState.addHistory("WINNER: B (Attackers)");
+                gameState.addHistory("Secret word fully revealed: " + gameState.getSecret());
+                broadcast("TYPE:GAME_OVER\nWINNER:B\nMSG:Secret fully revealed");
+                gameState.setGameOver(true);
+            }
+            clearHintAndConnection();
+            broadcastState();
+            return;
+        }
+        // Otherwise, failed connection — reveal b1 intended and b2 guess to history, no life lost
+        gameState.addHistory("✗ CONNECTION FAILED");
+        gameState.addHistory("Intended: '" + (intended==null?"(none)":intended) + "' | " + b2 + " guessed: '" + (b2Guess==null?"(none)":b2Guess) + "'");
+        gameState.addHistory("No penalty. Game continues.");
+        clearHintAndConnection();
+        broadcast("TYPE:CONNECTION_FAILED\nMSG:Connection failed; no lives lost");
+        broadcastState();
+    }
+
 }
