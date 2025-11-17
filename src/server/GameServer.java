@@ -166,12 +166,17 @@ class GameServer{
             sendTo(hinter, "TYPE:ERROR\nMSG:Hint not allowed in current phase");
             return;
         }
+        // prevent multiple hints at the same time
+        if (gameState.isHintActive()){
+            sendTo(hinter, "TYPE:ERROR\nMSG:Another hint is already active");
+            return;
+        }
         gameState.setPendingHint(hinter, hint, intendedW);
         gameState.addHistory("---");
         gameState.addHistory("HINT STARTED by " + hinter);
         gameState.addHistory("Public Hint: \"" + hint + "\"");
-        gameState.addHistory("(Intended word hidden from A - Timeout: 120s)");
-        broadcast("TYPE:HINT_STARTED\nGIVER:" + hinter + "\nHINT:" + hint + "\nTIME:120");
+        gameState.addHistory("(Intended word hidden from A - Timeout: 60s)"); //fixing 60 sec timer
+        broadcast("TYPE:HINT_STARTED\nGIVER:" + hinter + "\nHINT:" + hint + "\nTIME:60");
         broadcastState();
 
         timerManager.scheduleHintTimeout(hinter);
@@ -180,6 +185,12 @@ class GameServer{
     public synchronized void requestConnect(String requester){
         if (!gameState.isHintActive()){
             sendTo(requester, "TYPE:ERROR\nMSG:No active hint");
+            return;
+        }
+        // Prevent the hint giver from requesting a connection
+        String hintGiver = gameState.getPendingHintGiver();
+        if (hintGiver != null && hintGiver.equals(requester)){
+            sendTo(requester, "TYPE:ERROR\nMSG:Hint giver cannot request a connection");
             return;
         }
         if (gameState.isConnectionWindowOpen()){
@@ -198,7 +209,17 @@ class GameServer{
     }
 
     public synchronized void submitGuess(String who, String guess){
-        // store guess
+        // If a connection window is open, only allow A or the connection requester (B2) to submit guesses
+        if (gameState.isConnectionWindowOpen()){
+            String b2 = gameState.getConnectionRequester();
+            String aPlayer = gameState.getActivePlayer();
+            if (who == null || (!who.equals(b2) && !who.equals(aPlayer))){
+                sendTo(who, "TYPE:ERROR\nMSG:Not allowed to submit guess during connection window");
+                return;
+            }
+        }
+
+        // store guess (only allowed ones will reach here when connection window open)
         gameState.putGuess(who, guess);
         gameState.addHistory(who + " submitted guess (masked).");
         broadcastState();
@@ -212,7 +233,6 @@ class GameServer{
 
     public synchronized void resolveConnection(){
         // Gather data
-        String b1 = gameState.getPendingHintGiver();
         String intended = gameState.getPendingIntended();
         String b2 = gameState.getConnectionRequester();
         String aPlayer = gameState.getActivePlayer();
