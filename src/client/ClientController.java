@@ -531,10 +531,43 @@ public class ClientController {
 
         resetConnectionButtons();
         statusLabel.setText("Disconnected");
-        statusLabel.setStyle("-fx-text-fill: #888;");
+        statusLabel.setStyle("-fx-text-fill: #000000;");
 
         closeSocket();
+
+        gamePanel.setVisible(false);
+        gamePanel.setManaged(false);
+
+        lobbyPanel.setVisible(false);
+        lobbyPanel.setManaged(false);
+
+        playerListArea.clear();
+        readyStatusLabel.setText("");
+
+        secretField.clear();
+        guessFieldA.clear();
+
+        roleLabel.setText("");
+        prefixLabel.setText("");
+        livesLabel.setText("");
+        aLabel.setText("");
+        historyArea.clear();
+
+        roleAPanel.setVisible(false);
+        roleAPanel.setManaged(false);
+
+        roleBPanel.setVisible(false);
+        roleBPanel.setManaged(false);
+
+        hintPublicField.clear();
+        hintIntendedField.clear();
+        guessFieldB.clear();
+
+        hostField.setDisable(false);
+        portField.setDisable(false);
+        nameField.setDisable(false);
     }
+
 
     @FXML
     private void onJoin() {
