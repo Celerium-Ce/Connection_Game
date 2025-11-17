@@ -5,7 +5,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import java.io.*;
-import java.lang.classfile.Label;
+
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -144,8 +144,8 @@ public class ClientController {
         String playerList = "";
         String ownName = nameField.getText().trim();
 
-        for (String name : playerMap.keySet()) {
-            boolean isReady = playerMap.get(name);
+        for (String name : playerReadiness.keySet()) {
+            boolean isReady = playerReadiness.get(name);
             String playerString = "";
 
             if (name.equals(ownName)) {
@@ -579,7 +579,7 @@ public class ClientController {
 
     @FXML
     private void onGuess() {
-        String guess;
+        String guess = "";
         boolean wasChanged = false;
 
         if ("A".equals(myRole)) {
