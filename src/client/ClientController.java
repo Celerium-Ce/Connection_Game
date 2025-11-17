@@ -92,16 +92,16 @@ public class ClientController {
     private BufferedReader in;
     private PrintWriter out;
     private Thread listenerThread;
-    private Thread reconnectThread;
+    private Thread reconnectionThread;
     private volatile boolean isRunning = false; // running
     private volatile boolean disconnected = false; // manualDisconnect
     private volatile boolean joined = false;
     private String prevHost = "";
     private int prevPort = 0;
     private String myRole = null;
-    private Map<String, Boolean> playerMap = new HashMap<>();
+    private Map<String, Boolean> playerReadiness = new HashMap<>();
 
-    private void onConnect_GUI_changes() {
+    private void onConnect_GUIUpdate() {
         statusLabel.setText("Connected");
         statusLabel.setStyle("-fx-text-fill: green;");
         connectBtn.setDisable(true);
@@ -109,17 +109,17 @@ public class ClientController {
         joinBtn.setDisable(false);
     }
 
-    private void reset_connectionBtn() {
+    private void resetConnectionButtons() {
         connectBtn.setDisable(false);
         disconnectBtn.setDisable(true);
         joinBtn.setDisable(true);
         readyBtn.setDisable(true);
     }
 
-    private void onConnectFailure_GUI_changes(IOException e) {
+    private void onConnectionFailure_GUIUpdate(IOException e) {
         statusLabel.setText("Connect failed: " + e.getMessage());
         statusLabel.setStyle("-fx-text-fill: red;");
-        reset_connectionBtn();
+        resetConnectionButtons();
     }
 
     private void closeSocket() {
@@ -132,8 +132,9 @@ public class ClientController {
     }
 
     private void send(String s) {
-        if (out == null)
+        if (out == null) {
             return;
+        }
         out.println(s);
         out.println();
         out.flush();
@@ -163,7 +164,195 @@ public class ClientController {
         playerListArea.setText(playerList);
     }
 
-    private void listenerFnc() {
+    private void reconnectionGUIUpdate() {
+        Platform.runLater(() -> {
+            statusLabel.setText("Reconnected");
+            statusLabel.setStyle("-fx-text-fill: green;");
+            connectBtn.setDisable(true);
+            disconnectBtn.setDisable(false);
+        });
+    }
+
+    private void reconnectionThreadFunc() {
+        while (!disconnected) {
+            try {
+                Thread.sleep(2000);
+                Socket s = new Socket(prevHost, prevPort);
+                socket = s;
+
+                InputStream inputStream = s.getInputStream();
+                OutputStream outputStream = s.getOutputStream();
+                InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
+
+                BufferedReader bufferedIn = new BufferedReader(inputStreamReader);
+                in = bufferedIn;
+
+                PrintWriter bufferedOut = new PrintWriter(outputStream, true);
+                out = bufferedOut;
+            
+                isRunning = true;
+                reconnectionGUIUpdate();
+
+                if (joined) {
+                    String name = nameField.getText().trim();
+                    if (!name.isEmpty()) {
+                        send("TYPE:JOIN\nNAME:" + name);
+                    }
+                }
+
+                startListener();
+                return;
+            } 
+            
+            catch (IOException e) {}
+            catch (InterruptedException e) {}
+        }
+    }
+
+    private void attemptReconnectLoop() {
+        synchronized (this) {
+            if (reconnectionThread != null && reconnectionThread.isAlive()) {
+                return;
+            }
+
+            reconnectionThread = new Thread(() -> reconnectionThreadFunc(), "reconnect");
+            reconnectionThread.setDaemon(true);
+            reconnectionThread.start();
+        }
+    }
+
+    private void processMessage(List<String> messages) {
+        ParsedMessage parsedMessage = parseMessage(messages);
+        String messageType = parsedMessage.type;
+
+        if ("STATE_UPDATE".equals(messageType)) {
+            handleStateUpdate(parsedMessage);
+
+        } 
+        
+        else if ("CONNECTION_WINDOW".equals(messageType)) {
+            handleConnectionWindow(messages);
+
+        } 
+        
+        else if ("CONNECTION_SUCCESS".equals(messageType) || "CONNECTION_FAILED".equals(messageType) || "HINT_TIMEOUT".equals(messageType)) {
+            handleConnectionEnd(messages);
+
+        } 
+    }
+
+    private ParsedMessage parseMessage(List<String> messages) {
+        String messageType = null, prefix = null, lives = null, a = null;
+        boolean readingPlayersSection = false, readingHistorySection = false;
+        String historyString = "";
+        Map<String, Boolean> tempReadiness = new HashMap<>();
+
+        for (String message : messages) {
+            if (message.equals("HISTORY_START") || message.equals("HISTORY_END")) { 
+                readingHistorySection = true; 
+                continue; 
+            }
+
+            if (message.equals("PLAYERS_START") || message.equals("PLAYERS_END")) { 
+                readingPlayersSection = true; 
+                continue; 
+            }
+
+            if (readingPlayersSection) {
+                if (message.startsWith("PLAYER:")) {
+                    String[] playerStrParts = message.split(":", 4);
+                    if (playerStrParts.length >= 4) { 
+                        Boolean readiness = "true".equalsIgnoreCase(playerStrParts[3]);
+                        tempReadiness.put(playerStrParts[1], readiness); 
+                    }
+                }
+                
+                continue;
+            }
+
+            if (readingHistorySection) {
+                historyString += message;
+                historyString += '\n';
+                continue;
+            }
+
+            int idx = message.indexOf(':');
+            if (idx > 0) {
+                String key = message.substring(0, idx).trim();
+                String value = message.substring(idx + 1).trim();
+
+                if ("TYPE".equals(key)) {
+                    messageType = value;
+                }
+
+                else if ("PREFIX".equals(key)) { 
+                    prefix = value;
+                }
+
+                else if ("LIVES".equals(key)) {
+                    lives = value;
+                }
+
+                else if ("A".equals(key)) {
+                    a = value;
+                }
+            }
+        }
+
+        return new ParsedMessage(messageType, prefix, lives, a, historyString = "".toString(), tempReadiness);
+    }
+
+    private void handleStateUpdate(ParsedMessage parsedMessage) {
+        playerReadiness.clear();
+        playerReadiness.putAll(parsedMessage.playerReadiness);
+
+        Platform.runLater(() -> {
+            if (parsedMessage.prefix == null || parsedMessage.prefix.isEmpty()) {
+                prefixLabel.setText( "-" );
+            }
+
+            else {
+                prefixLabel.setText(parsedMessage.prefix);
+            }
+
+            if (parsedMessage.lives == null || parsedMessage.lives.isEmpty()) {
+                livesLabel.setText("-");
+            } else {
+                livesLabel.setText(parsedMessage.lives);
+            }
+
+            if (parsedMessage.a == null || parsedMessage.a.isEmpty()) {
+                aLabel.setText("-");
+            } else {
+                aLabel.setText(parsedMessage.a);
+            }
+
+            historyArea.setText(parsedMessage.history.trim());
+            updatePlayerList();
+            updateUIState(parsedMessage.a, parsedMessage.prefix);
+        });
+    }
+
+    private void handleConnectionWindow(List<String> messages) {
+        Platform.runLater(() -> {
+            if ("B".equals(myRole)) {
+                guessBtnB.setDisable(false);
+            }
+            else if ("A".equals(myRole)) {
+                guessBtn.setDisable(false);
+            }
+        });
+    }
+
+    private void handleConnectionEnd(List<String> messages) {
+        Platform.runLater(() -> {
+            guessBtnB.setDisable(true);
+            guessBtn.setDisable(true);
+        });
+    }
+
+
+    private void listenerThreadFunc() {
         try {
             String ln = in.readLine();
             List<String> list = new ArrayList<>();
@@ -191,7 +380,7 @@ public class ClientController {
     }
 
     private void startListener() {
-        listenerThread = new Thread(this::listenerFnc, "listener");
+        listenerThread = new Thread(this::listenerThreadFunc, "listener");
         listenerThread.setDaemon(true);
         listenerThread.start();
     }
@@ -211,20 +400,21 @@ public class ClientController {
 
         try {
             socket = new Socket(host, port);
+
             InputStream socket_input = socket.getInputStream();
             OutputStream socket_output = socket.getOutputStream();
-
             InputStreamReader instream = new InputStreamReader(socket_input);
+
             in = new BufferedReader(instream);
             out = new PrintWriter(socket_output, true);
 
             isRunning = true;
 
-            onConnect_GUI_changes();
+            onConnect_GUIUpdate();
             startListener();
 
         } catch (IOException e) {
-            onConnectFailure_GUI_changes(e);
+            onConnectionFailure_GUIUpdate(e);
         }
     }
 
@@ -234,7 +424,7 @@ public class ClientController {
         joined = false;
         isRunning = false;
 
-        reset_connectionBtn();
+        resetConnectionButtons();
         statusLabel.setText("Disconnected");
         statusLabel.setStyle("-fx-text-fill: #888;");
 
