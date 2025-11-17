@@ -150,6 +150,8 @@ public class ClientController {
 
             if (name.equals(ownName)) {
                 playerString += name + " (You) ";
+            } else {
+                playerString += name + " ";
             }
 
             if (isReady) {
@@ -248,13 +250,23 @@ public class ClientController {
         Map<String, Boolean> tempReadiness = new HashMap<>();
 
         for (String message : messages) {
-            if (message.equals("HISTORY_START") || message.equals("HISTORY_END")) { 
+            if (message.equals("HISTORY_START")) { 
                 readingHistorySection = true; 
                 continue; 
             }
+            
+            if (message.equals("HISTORY_END")) { 
+                readingHistorySection = false; 
+                continue; 
+            }
 
-            if (message.equals("PLAYERS_START") || message.equals("PLAYERS_END")) { 
+            if (message.equals("PLAYERS_START")) { 
                 readingPlayersSection = true; 
+                continue; 
+            }
+            
+            if (message.equals("PLAYERS_END")) { 
+                readingPlayersSection = false; 
                 continue; 
             }
 
@@ -299,7 +311,7 @@ public class ClientController {
             }
         }
 
-        return new ParsedMessage(messageType, prefix, lives, a, historyString = "".toString(), tempReadiness);
+        return new ParsedMessage(messageType, prefix, lives, a, historyString, tempReadiness);
     }
 
     private void handleStateUpdate(ParsedMessage parsedMessage) {

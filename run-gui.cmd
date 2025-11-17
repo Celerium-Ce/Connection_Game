@@ -16,7 +16,7 @@ if "%JAVA_FX_LIB%"=="" (
     set "JAVA_FX_LIB=%~1"
   )
 )
-a
+
 echo [INFO] Using JAVA_FX_LIB=%JAVA_FX_LIB%
 
 REM Compile core sources if not already
@@ -27,13 +27,14 @@ if not exist out (
 )
 
 echo [INFO] Compiling JavaFX classes...
-javac --module-path "%JAVA_FX_LIB%" --add-modules javafx.controls,javafx.fxml -d out src\client\*.java
-if not exist out\client mkdir out\client
-copy /Y src\client\client.fxml out\client\client.fxml >nul
+javac --module-path "%JAVA_FX_LIB%" --add-modules javafx.controls,javafx.fxml -d out src\client\ParsedMessage.java src\client\ClientController.java src\client\GuiClient.java
 if errorlevel 1 (
   echo [ERROR] JavaFX compilation failed.
   exit /b 1
 )
+
+if not exist out\client mkdir out\client
+copy /Y src\client\client.fxml out\client\client.fxml >nul
 
 echo [INFO] Launching GUI client...
 java --enable-native-access=javafx.graphics --module-path "%JAVA_FX_LIB%" --add-modules javafx.controls,javafx.fxml -cp out client.GuiClient
