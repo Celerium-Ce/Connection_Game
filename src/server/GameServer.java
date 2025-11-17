@@ -104,6 +104,60 @@ class GameServer{
         broadcastState();
     }
 
+    // functions for starting game ish
 
+    public synchronized void markReady(String playerName){
+        if (!handlers.containsKey(playerName)){
+            sendTo(playerName, "TYPE:ERROR\nMSG:Not connected");
+            return;
+        }
+        gameState.setReady(playerName,true);
+        broadcast("TYPE:PLAYER_READY\nNAME:" +playerName);
+        // Check all ready
+        if (handlers.size() >= 3){
+            boolean allReady = true;
+            for (String p : handlers.keySet()){ // check if all ready
+                if (!gameState.isReady(p)){allReady = false; break;}
+            }
+            if (allReady && gameState.getActivePlayer() == null){ // start game
+                // select A randomly
+                List<String> players = new ArrayList<>(handlers.keySet());
+                String a = players.get(new Random().nextInt(players.size()));
+                //game state updates
+                gameState.setActivePlayer(a);
+                gameState.addHistory("=== GAME STARTED ===");
+                gameState.addHistory("Role Assignment: Player " + a + " is DEFENDER (A)");
+                gameState.addHistory("All other players are ATTACKERS (B)");
+                gameState.addHistory("Waiting for A to set secret word...");
+                broadcast("TYPE:ROLES_ASSIGNED\nA:" + a);
+                // send updated game state to all clients
+                broadcastState();
+            } else {
+                broadcastState();
+            }
+        } else{
+            broadcast("TYPE:INFO\nMSG:Need at least 3 players ready to start");
+            broadcastState();
+        }
+    }
     
+    public synchronized void setSecret(String setterName, String secret){ // to be called by A to set the word
+        if (gameState.getActivePlayer() != null && !setterName.equals(gameState.getActivePlayer())){ //checks if the player u called is A
+            sendTo(setterName, "TYPE:ERROR\nMSG:Only A can set the secret");
+            return;
+        }
+        // Update game state
+        gameState.setSecret(secret);
+        gameState.setActivePlayer(setterName); // A
+        gameState.revealInitialPrefix();
+        gameState.resetLives();
+        gameState.addHistory("---");
+        gameState.addHistory("SECRET SET by A (" + setterName + ")");
+        gameState.addHistory("Initial Prefix: " + gameState.getPrefix() + " | Lives: " + gameState.getLives());
+        gameState.addHistory("B players can now START_HINT to communicate!");
+        // Broadcast updated state
+        broadcastState();
+    }
+
+    // functions for connections and hints
 }
