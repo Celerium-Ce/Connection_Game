@@ -51,7 +51,7 @@ class GameServer{
 
 
     public void broadcast(String msg){ // function to send message to all connected clients (quite straightforward)
-        System.out.println("[Broadcast] " + msg.replace('\n','||'));
+        System.out.println("[Broadcast] " + msg.replace('\n', ' '));
         for (ClientHandler h : handlers.values()) { 
             h.send(msg);
         }
