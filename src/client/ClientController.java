@@ -99,7 +99,7 @@ public class ClientController {
     private String prevHost = "";
     private int prevPort = 0;
     private String myRole = null;
-    private Map<String, Boolean> playerReadiness = new HashMap<>();
+    private Map<String, Boolean> playerMap = new HashMap<>();
 
     private void onConnect_GUI_changes() {
         statusLabel.setText("Connected");
@@ -129,6 +129,71 @@ public class ClientController {
             }
         } catch (IOException ignored) {
         }
+    }
+
+    private void send(String s) {
+        if (out == null)
+            return;
+        out.println(s);
+        out.println();
+        out.flush();
+    }
+
+    private void updatePlayerList() {
+        String playerList = "";
+        String myName = nameField.getText().trim();
+
+        for (String name : playerMap.keySet()) {
+            boolean isReady = playerMap.get(name);
+            String playerString = "";
+
+            if (name.equals(myName)) {
+                playerString += name + " (You) ";
+            }
+
+            if (isReady) {
+                playerString += "[ready]" + "\n";
+            } else {
+                playerString += "[waiting]" + "\n";
+            }
+
+            playerList += playerString;
+        }
+
+        playerListArea.setText(playerList);
+    }
+
+    private void listenerFnc() {
+        try {
+            String ln = in.readLine();
+            List<String> list = new ArrayList<>();
+
+            while (isRunning && ln != null) {
+
+                if (!ln.trim().isEmpty()) {
+                    list.add(ln);
+                } else {
+                    if (!list.isEmpty()) {
+                        processMessage(list);
+                        list.clear();
+                    }
+                }
+
+                ln = in.readLine();
+            }
+        } catch (IOException e) {}
+
+        if (isRunning && !disconnected) {
+            attemptReconnectLoop();
+        }
+
+        Platform.runLater(() -> statusLabel.setText("Disconnected"));
+    }
+
+    private void startListener() {
+        listenerThread = new Thread(this::listenerFnc, "listener");
+        listenerThread.setDaemon(true);
+        listenerThread.start();
     }
 
     @FXML
@@ -256,7 +321,6 @@ public class ClientController {
 
     @FXML
     private void onQuit() {
-
         isRunning = false;
         closeSocket();
         Platform.exit();
