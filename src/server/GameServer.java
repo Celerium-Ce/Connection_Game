@@ -49,6 +49,7 @@ class GameServer{
         }
     }
 
+
     public void broadcast(String msg){ // function to send message to all connected clients (quite straightforward)
         System.out.println("[Broadcast] " + msg.replace('\n','||'));
         for (ClientHandler h : handlers.values()) { 
@@ -60,6 +61,49 @@ class GameServer{
         ClientHandler h = handlers.get(playerName);
         if (h != null) h.send(msg);
     }
-    
 
+    // Main and important function for giving the currennt game state to every client (Should be called after any gameState update)
+    public void broadcastState(){
+        StringBuilder sb = new StringBuilder(); // To communicate the state we serialize everything into a string and send it
+        sb.append("TYPE:STATE_UPDATE\n");
+        sb.append("PREFIX:").append(gameState.getPrefix()).append("\n");
+        sb.append("LIVES:").append(gameState.getLives()).append("\n");
+        sb.append("A:").append(gameState.getActivePlayer() == null ? "" : gameState.getActivePlayer()).append("\n");
+        sb.append("PLAYERS_START\n");
+        for (String p : handlers.keySet()) {
+            boolean r = gameState.isReady(p);
+            sb.append("PLAYER:").append(p).append(":READY:").append(r).append("\n");
+        }
+        sb.append("PLAYERS_END\n");
+        sb.append("HISTORY_START\n");
+        for (String h : gameState.getHistory()) {
+            sb.append(h.replace("\n"," ")).append("\n");
+        }
+        sb.append("HISTORY_END\n");
+        broadcast(sb.toString());
+    }
+
+    // when client handler explicitly needs the gameState
+    public synchronized GameState getGameState() {
+        return gameState;
+    }
+
+
+    // functions for registering and unregistering clients (to be called by client handler)
+    public synchronized void registerHandler(String playerName, ClientHandler handler){
+        handlers.put(playerName, handler);
+        gameState.setReady(playerName, false); // new player is not ready by default
+        broadcast("TYPE:PLAYER_JOINED\nNAME:" + playerName);
+        broadcastState();
+    }
+
+    public synchronized void unregisterHandler(String playerName){
+        handlers.remove(playerName);
+        gameState.removePlayer(playerName); // remove player from game state
+        broadcast("TYPE:PLAYER_LEFT\nNAME:" + playerName);
+        broadcastState();
+    }
+
+
+    
 }
