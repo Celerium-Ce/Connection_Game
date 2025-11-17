@@ -122,6 +122,15 @@ public class ClientController {
         reset_connectionBtn();
     }
 
+    private void closeSocket() {
+        try {
+            if (socket != null) {
+                socket.close();
+            }
+        } catch (IOException ignored) {
+        }
+    }
+
     @FXML
     private void onConnect() {
         if (isRunning) {
@@ -164,44 +173,92 @@ public class ClientController {
         statusLabel.setText("Disconnected");
         statusLabel.setStyle("-fx-text-fill: #888;");
 
-        try {
-            if (socket != null) {
-                socket.close();
-            }
-        } catch (IOException ignored) {
-        }
-
+        closeSocket();
     }
 
     @FXML
     private void onJoin() {
+        String name = nameField.getText().trim();
+
+        if (!name.isEmpty()) {
+            send("TYPE:JOIN\nNAME:" + name);
+
+            joined = true;
+            joinBtn.setDisable(true);
+        }
     }
 
     @FXML
     private void onReady() {
+        String name = nameField.getText().trim();
+
+        if (name.isEmpty()) {
+            statusLabel.setText("Enter a name before readying");
+            statusLabel.setStyle("-fx-text-fill: red;");
+            return;
+        }
+
+        // if (!joined) {
+        // send("TYPE:JOIN\nNAME:" + name);
+
+        // joined = true;
+        // joinBtn.setDisable(true);
+        // }
+
+        send("TYPE:READY");
     }
 
     @FXML
     private void onSetSecret() {
+        String sec = secretField.getText().trim();
+
+        if (!sec.isEmpty()) {
+            send("TYPE:SET_SECRET\nSECRET:" + sec);
+        }
     }
 
     @FXML
     private void onGuess() {
+        String guess;
+        boolean wasChanged = false;
+
+        if ("A".equals(myRole)) {
+            guess = guessFieldA.getText().trim();
+            wasChanged = true;
+        } else if ("B".equals(myRole)) {
+            guess = guessFieldB.getText().trim();
+            wasChanged = true;
+        }
+
+        if (!wasChanged || guess.isEmpty()) {
+            return;
+        }
+
+        send("TYPE:SUBMIT_GUESS\nGUESS:" + guess);
     }
 
     @FXML
     private void onStartHint() {
+        String hint = hintPublicField.getText().trim();
+        String intended = hintIntendedField.getText().trim();
+
+        if (hint.isEmpty() || intended.isEmpty()) {
+            return;
+        }
+
+        send("TYPE:START_HINT\nHINT:" + hint + "\nINTENDED:" + intended);
     }
 
     @FXML
     private void onConnectAttempt() {
-    }
-
-    @FXML
-    private void onPing() {
+        send("TYPE:CONNECT");
     }
 
     @FXML
     private void onQuit() {
+
+        isRunning = false;
+        closeSocket();
+        Platform.exit();
     }
 }
