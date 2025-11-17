@@ -285,4 +285,8 @@ class GameServer{
         broadcastState();
     }
 
+    private void clearHintAndConnection() {
+        gameState.clearPendingHint();
+        gameState.clearConnection();
+    }
 }
