@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-
-=======
 package client;
 
 import javafx.application.Application;
@@ -41,4 +38,3 @@ public class GuiClient extends Application {
         launch(args);
     }
 }
->>>>>>> origin/client-branch
