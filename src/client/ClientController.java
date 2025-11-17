@@ -142,13 +142,13 @@ public class ClientController {
 
     private void updatePlayerList() {
         String playerList = "";
-        String myName = nameField.getText().trim();
+        String ownName = nameField.getText().trim();
 
         for (String name : playerMap.keySet()) {
             boolean isReady = playerMap.get(name);
             String playerString = "";
 
-            if (name.equals(myName)) {
+            if (name.equals(ownName)) {
                 playerString += name + " (You) ";
             }
 
@@ -351,6 +351,111 @@ public class ClientController {
         });
     }
 
+    private void givenRolesUpdateGUI(Boolean secretChosen, Boolean isA) {
+        roleAPanel.setVisible(isA);
+        roleAPanel.setManaged(isA);
+        roleBPanel.setVisible(!isA);
+        roleBPanel.setManaged(!isA);
+
+        lobbyPanel.setVisible(false);
+        lobbyPanel.setManaged(false);
+        gamePanel.setVisible(true);
+        gamePanel.setManaged(true);
+
+        if (!isA) {
+            hintPublicField.setDisable(!secretChosen);
+            hintIntendedField.setDisable(!secretChosen);
+            startHintBtn.setDisable(!secretChosen);
+            connectBtn2.setDisable(!secretChosen);
+        }
+                
+        else if (isA) {
+            secretField.setDisable(secretChosen);
+            setSecretBtn.setDisable(secretChosen);
+        }
+
+        if (isA) {
+            roleLabel.setText("A (Defender)");
+        }
+
+        else {
+            roleLabel.setText("B (Communicator)");
+        }
+    }
+
+    private void notGivenRolesGUIUpdate(String ownName) {
+        gamePanel.setVisible(false);
+        gamePanel.setManaged(false);
+
+        lobbyPanel.setVisible(true);
+        lobbyPanel.setManaged(true);
+        
+        // Enable ready button if joined
+        boolean joined = false;
+        if (!ownName.isEmpty() && playerReadiness.containsKey(ownName)) {
+            joined = true;
+        }
+
+        boolean disableReadyButton = false;
+        if (!joined || playerReadiness.getOrDefault(ownName, false)) {
+            disableReadyButton = true;
+        }
+
+        readyBtn.setDisable(disableReadyButton);
+
+        if (joined) {
+            boolean amReady = false;
+            if (playerReadiness.getOrDefault(ownName, false)) {
+                amReady = true;
+            }
+
+            if (amReady) {
+                readyStatusLabel.setText("You are READY! Waiting for others...");
+            }
+
+            else {
+                readyStatusLabel.setText("Click Ready when you're ready to play");
+            }
+
+        } else if (!ownName.isEmpty()) {
+            readyStatusLabel.setText("Waiting for server to confirm join...");
+        }
+    }
+
+    private void updateUIState(String activePlayer, String currPrefix) {
+        String ownName = nameField.getText().trim();
+
+        boolean givenRoles = false;
+        if (activePlayer != null && !activePlayer.isEmpty()) {
+            givenRoles = true;
+        }
+
+        boolean isA = false;
+        if (givenRoles && activePlayer.equals(ownName)) {
+            isA = true;
+        }
+
+        boolean secretChosen = false;
+        if ( currPrefix != null && !currPrefix.isEmpty() && !"-".equals(currPrefix) ) {
+            secretChosen = true;
+        }
+        
+        if (isA) {
+            myRole = "A";
+        } else if (givenRoles) {
+            myRole = "B";
+        } else {
+            myRole = null;
+        }
+
+        if (givenRoles) {
+            givenRolesUpdateGUI(secretChosen, isA);
+        }
+        
+        else if (!givenRoles) {
+            notGivenRolesGUIUpdate(ownName);
+        } 
+    }
 
     private void listenerThreadFunc() {
         try {
