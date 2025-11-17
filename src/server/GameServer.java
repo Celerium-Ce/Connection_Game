@@ -127,7 +127,7 @@ class GameServer{
                 gameState.setActivePlayer(a);
                 gameState.addHistory("=== GAME STARTED ===");
                 gameState.addHistory("Role Assignment: Player " + a + " is DEFENDER (A)");
-                gameState.addHistory("All other players are ATTACKERS (B)");
+                gameState.addHistory("All other players are COMMUNICATORS (B)");
                 gameState.addHistory("Waiting for A to set secret word...");
                 broadcast("TYPE:ROLES_ASSIGNED\nA:" + a);
                 // send updated game state to all clients
@@ -170,6 +170,15 @@ class GameServer{
         if (gameState.isHintActive()){
             sendTo(hinter, "TYPE:ERROR\nMSG:Another hint is already active");
             return;
+        }
+        // Validate intended word matches current prefix (case-insensitive)
+        String currPrefix = gameState.getPrefix();
+        String intendedLower = intendedW == null ? "" : intendedW.trim().toLowerCase();
+        if (currPrefix != null && !currPrefix.isEmpty()){
+            if (intendedLower.isEmpty() || !intendedLower.startsWith(currPrefix.toLowerCase())){
+                sendTo(hinter, "TYPE:ERROR\nMSG:Intended word must start with current prefix: " + currPrefix);
+                return;
+            }
         }
         gameState.setPendingHint(hinter, hint, intendedW);
         gameState.addHistory("---");
@@ -245,7 +254,7 @@ class GameServer{
         // check win condition
         if ((intended != null && intended.equalsIgnoreCase(secret)) || (b2Guess != null && b2Guess.equalsIgnoreCase(secret))){
             gameState.addHistory("=== GAME OVER ===");
-            gameState.addHistory("WINNER: B (Attackers)");
+            gameState.addHistory("WINNER: B (Communicators)");
             gameState.addHistory("Secret word guessed directly: " + secret);
             broadcast("TYPE:GAME_OVER\nWINNER:B\nMSG:Secret guessed via connection attempt");
             gameState.setGameOver(true);
@@ -287,7 +296,7 @@ class GameServer{
             gameState.addHistory("NEW PREFIX: " + gameState.getPrefix() + " | Lives reset to 5");
             if (gameState.isSecretFullyRevealed()){
                 gameState.addHistory("=== GAME OVER ===");
-                gameState.addHistory("WINNER: B (Attackers)");
+                gameState.addHistory("WINNER: B (Communicators)");
                 gameState.addHistory("Secret word fully revealed: " + gameState.getSecret());
                 broadcast("TYPE:GAME_OVER\nWINNER:B\nMSG:Secret fully revealed");
                 gameState.setGameOver(true);

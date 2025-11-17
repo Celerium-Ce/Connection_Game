@@ -31,7 +31,7 @@ public class GameState {
 
     // getters + setters
     public String getSecret(){ return secret;}
-    public void setSecret(String secret){ this.secret = secret == null ? "" : secret.trim(); }
+    public void setSecret(String secret){ this.secret = secret == null ? "" : secret.trim().toLowerCase(); }
     public String getPrefix(){return prefix;}
     public int getLives(){return lives;}
     public String getActivePlayer(){return activePlayer;}
@@ -56,8 +56,8 @@ public class GameState {
     // pending hint
     public void setPendingHint(String giver, String publicHint, String intended){
         this.pHintGiver = giver;
-        this.pHintPublic = publicHint;
-        this.pIntended = intended;
+        this.pHintPublic = publicHint == null ? null : publicHint.trim().toLowerCase();
+        this.pIntended = intended == null ? null : intended.trim().toLowerCase();
     }
     public String getPendingHintGiver(){ return pHintGiver;}
     public String getPendingIntended(){return pIntended;}
@@ -79,7 +79,7 @@ public class GameState {
     public String getConnectionRequester(){return connectionRequester;}
     public void putGuess(String playerName, String guess){
         if (playerName != null && connectionRequester != null){
-            connectionGuesses.put(playerName, guess);
+            connectionGuesses.put(playerName, guess == null ? null : guess.trim().toLowerCase());
         }
     }
     public String getGuess(String playerName){return connectionGuesses.get(playerName);}
