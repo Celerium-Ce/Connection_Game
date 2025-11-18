@@ -16,7 +16,7 @@ public class TimerManager {
     public void scheduleHintTimeout(String giver) { // timeout (60s)
 
         // if hint timer already running, we don't start a new one
-        if (hintFuture != null && !hintFuture.isDone()) {
+        if (hintFuture != null && !hintFuture.isDone()){
             return;
         }
          
