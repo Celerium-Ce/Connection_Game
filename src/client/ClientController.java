@@ -4,6 +4,9 @@ import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
+import javafx.util.Duration;
 import java.io.*;
 
 import java.net.Socket;
@@ -28,6 +31,8 @@ public class ClientController {
     private Button disconnectBtn;
     @FXML
     private Label statusLabel;
+    @FXML
+    private Label timerLabel;
 
     @FXML
     private VBox lobbyPanel;
@@ -86,6 +91,10 @@ public class ClientController {
         joinBtn.setDisable(true);
         readyBtn.setDisable(true);
         disconnectBtn.setDisable(true);
+        if (timerLabel != null) {
+            timerLabel.setVisible(false);
+            timerLabel.setText("");
+        }
     }
 
     private Socket socket;
@@ -166,6 +175,49 @@ public class ClientController {
         playerListArea.setText(playerList);
     }
 
+    // Countdown timer management
+    private Timeline countdownTimeline = null;
+    private int countdownRemainingSeconds = 0;
+
+    private void startCountdown(int seconds) {
+        stopCountdown();
+        countdownRemainingSeconds = seconds;
+
+        Platform.runLater(() -> {
+            if (timerLabel != null) {
+                timerLabel.setVisible(true);
+                timerLabel.setText(String.format("%ds", countdownRemainingSeconds));
+            }
+        });
+
+        countdownTimeline = new Timeline(new KeyFrame(Duration.seconds(1), ev -> {
+            countdownRemainingSeconds -= 1;
+            Platform.runLater(() -> {
+                if (timerLabel != null) {
+                    timerLabel.setText(String.format("%ds", Math.max(0, countdownRemainingSeconds)));
+                }
+            });
+            if (countdownRemainingSeconds <= 0) {
+                stopCountdown();
+            }
+        }));
+        countdownTimeline.setCycleCount(Timeline.INDEFINITE);
+        countdownTimeline.play();
+    }
+
+    private void stopCountdown() {
+        if (countdownTimeline != null) {
+            countdownTimeline.stop();
+            countdownTimeline = null;
+        }
+        Platform.runLater(() -> {
+            if (timerLabel != null) {
+                timerLabel.setVisible(false);
+                timerLabel.setText("");
+            }
+        });
+    }
+
     private void reconnectionGUIUpdate() {
         Platform.runLater(() -> {
             statusLabel.setText("Reconnected");
@@ -234,6 +286,11 @@ public class ClientController {
         
         else if ("CONNECTION_WINDOW".equals(messageType)) {
             handleConnectionWindow(messages);
+
+        } 
+        
+        else if ("HINT_STARTED".equals(messageType)) {
+            handleHintStarted(messages);
 
         } 
         
@@ -346,6 +403,22 @@ public class ClientController {
     }
 
     private void handleConnectionWindow(List<String> messages) {
+        // Parse TIME from message block and start countdown if present
+        int timeSeconds = -1;
+        for (String m : messages) {
+            if (m.startsWith("TIME:")) {
+                try {
+                    timeSeconds = Integer.parseInt(m.substring(5).trim());
+                } catch (NumberFormatException e) {
+                    timeSeconds = -1;
+                }
+            }
+        }
+
+        if (timeSeconds > 0) {
+            startCountdown(timeSeconds);
+        }
+
         Platform.runLater(() -> {
             if ("B".equals(myRole)) {
                 guessBtnB.setDisable(false);
@@ -357,10 +430,28 @@ public class ClientController {
     }
 
     private void handleConnectionEnd(List<String> messages) {
+        stopCountdown();
         Platform.runLater(() -> {
             guessBtnB.setDisable(true);
             guessBtn.setDisable(true);
         });
+    }
+
+    private void handleHintStarted(List<String> messages) {
+        int timeSeconds = -1;
+        for (String m : messages) {
+            if (m.startsWith("TIME:")) {
+                try {
+                    timeSeconds = Integer.parseInt(m.substring(5).trim());
+                } catch (NumberFormatException e) {
+                    timeSeconds = -1;
+                }
+            }
+        }
+
+        if (timeSeconds > 0) {
+            startCountdown(timeSeconds);
+        }
     }
 
     private void givenRolesUpdateGUI(Boolean secretChosen, Boolean isA) {
