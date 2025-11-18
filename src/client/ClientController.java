@@ -17,6 +17,7 @@ import java.util.Map;
 
 public class ClientController {
 
+    // FXML variables
     @FXML
     private TextField hostField;
     @FXML
@@ -83,6 +84,7 @@ public class ClientController {
     @FXML
     private TextArea historyArea;
 
+    // Initially disable some elements and set value of others
     @FXML
     private void initialize() {
         historyArea.setText("");
@@ -102,14 +104,23 @@ public class ClientController {
     private PrintWriter out;
     private Thread listenerThread;
     private Thread reconnectionThread;
-    private volatile boolean isRunning = false; // running
-    private volatile boolean disconnected = false; // manualDisconnect
+    private volatile boolean isRunning = false; 
+    private volatile boolean disconnected = false; 
     private volatile boolean joined = false;
     private String prevHost = "";
     private int prevPort = 0;
     private String myRole = null;
     private Map<String, Boolean> playerReadiness = new HashMap<>();
 
+    // To restore buttons to default 
+    private void resetConnectionButtons() {
+        connectBtn.setDisable(false);
+        disconnectBtn.setDisable(true);
+        joinBtn.setDisable(true);
+        readyBtn.setDisable(true);
+    }
+
+    // To update GUI when connection to server happens
     private void onConnect_GUIUpdate() {
         statusLabel.setText("Connected");
         statusLabel.setStyle("-fx-text-fill: green;");
@@ -118,19 +129,14 @@ public class ClientController {
         joinBtn.setDisable(false);
     }
 
-    private void resetConnectionButtons() {
-        connectBtn.setDisable(false);
-        disconnectBtn.setDisable(true);
-        joinBtn.setDisable(true);
-        readyBtn.setDisable(true);
-    }
-
+    // To update GUI when connection to server fails
     private void onConnectionFailure_GUIUpdate(IOException e) {
         statusLabel.setText("Connect failed: " + e.getMessage());
         statusLabel.setStyle("-fx-text-fill: red;");
         resetConnectionButtons();
     }
 
+    // Close the socket
     private void closeSocket() {
         try {
             if (socket != null) {
@@ -140,6 +146,7 @@ public class ClientController {
         }
     }
 
+    // Send a message to server using PrintWriter
     private void send(String s) {
         if (out == null) {
             return;
@@ -149,6 +156,7 @@ public class ClientController {
         out.flush();
     }
 
+    // To display players in the lobby
     private void updatePlayerList() {
         String playerList = "";
         String ownName = nameField.getText().trim();
@@ -157,14 +165,14 @@ public class ClientController {
             boolean isReady = playerReadiness.get(name);
             String playerString = "";
 
-            if (name.equals(ownName)) {
-                playerString += name + " (You) ";
+            if (name.equals(ownName)) { // whether its you or another player
+                playerString += name + " (You) "; 
             } else {
                 playerString += name + " ";
             }
 
-            if (isReady) {
-                playerString += "[ready]" + "\n";
+            if (isReady) { // whether other players are ready or waiting
+                playerString += "[ready]" + "\n"; 
             } else {
                 playerString += "[waiting]" + "\n";
             }
@@ -173,6 +181,34 @@ public class ClientController {
         }
 
         playerListArea.setText(playerList);
+    }
+
+    // Function to run in timeline
+    private void keyframeFunc() {
+        countdownRemainingSeconds -= 1;
+        final int temp = countdownRemainingSeconds;
+
+        Platform.runLater(() -> {
+            if (timerLabel != null) {
+                timerLabel.setText(String.format("%ds", Math.max(0, temp)));
+            }
+        });
+
+        if (countdownRemainingSeconds > 0) {
+            return;
+        }
+
+        stopCountdown();
+    }
+
+    // Make timeline
+    private void makeTimeline() {
+        countdownTimeline = new Timeline(new KeyFrame(Duration.seconds(1), ev -> {
+            keyframeFunc();
+        }));
+
+        countdownTimeline.setCycleCount(Timeline.INDEFINITE);
+        countdownTimeline.play();
     }
 
     // Countdown timer management
@@ -190,34 +226,33 @@ public class ClientController {
             }
         });
 
-        countdownTimeline = new Timeline(new KeyFrame(Duration.seconds(1), ev -> {
-            countdownRemainingSeconds -= 1;
-            Platform.runLater(() -> {
-                if (timerLabel != null) {
-                    timerLabel.setText(String.format("%ds", Math.max(0, countdownRemainingSeconds)));
-                }
-            });
-            if (countdownRemainingSeconds <= 0) {
-                stopCountdown();
-            }
-        }));
-        countdownTimeline.setCycleCount(Timeline.INDEFINITE);
-        countdownTimeline.play();
+        makeTimeline();
     }
 
-    private void stopCountdown() {
-        if (countdownTimeline != null) {
-            countdownTimeline.stop();
-            countdownTimeline = null;
+    private void stopTimerGUIUpdate() {
+        if (timerLabel == null) {
+                return;
         }
+        
+        timerLabel.setText("");
+        timerLabel.setVisible(false);
+    }
+
+    // Stop count down of timer
+    private void stopCountdown() {
+        if (countdownTimeline == null) {
+            return;
+        }
+
+        countdownTimeline.stop();
+        countdownTimeline = null;
+
         Platform.runLater(() -> {
-            if (timerLabel != null) {
-                timerLabel.setVisible(false);
-                timerLabel.setText("");
-            }
+            stopTimerGUIUpdate();
         });
     }
 
+    // To update GUI when you reconnect to game
     private void reconnectionGUIUpdate() {
         Platform.runLater(() -> {
             statusLabel.setText("Reconnected");
@@ -227,10 +262,13 @@ public class ClientController {
         });
     }
 
+    // Function to run in reconnection thread
     private void reconnectionThreadFunc() {
         while (!disconnected) {
             try {
-                Thread.sleep(2000);
+                Thread.sleep(3000); // don't run constantly
+
+                // create new socket and replace old input/output streams with new ones
                 Socket s = new Socket(prevHost, prevPort);
                 socket = s;
 
@@ -246,7 +284,8 @@ public class ClientController {
             
                 isRunning = true;
                 reconnectionGUIUpdate();
-
+                
+                // Rejoin the game
                 if (joined) {
                     String name = nameField.getText().trim();
                     if (!name.isEmpty()) {
@@ -263,9 +302,10 @@ public class ClientController {
         }
     }
 
+    // Function to run the reconnection thread
     private void attemptReconnectLoop() {
         synchronized (this) {
-            if (reconnectionThread != null && reconnectionThread.isAlive()) {
+            if (reconnectionThread != null && reconnectionThread.isAlive()) {  // Don't create thread if already exists
                 return;
             }
 
@@ -275,10 +315,12 @@ public class ClientController {
         }
     }
 
+    // Process messages received from server
     private void processMessage(List<String> messages) {
-        ParsedMessage parsedMessage = parseMessage(messages);
+        ParsedMessage parsedMessage = parseMessage(messages); // Convert raw strings to an object
         String messageType = parsedMessage.type;
 
+        // Call appropriate handler
         if ("STATE_UPDATE".equals(messageType)) {
             handleStateUpdate(parsedMessage);
 
@@ -300,6 +342,7 @@ public class ClientController {
         } 
     }
 
+    // Convert raw strings to objects
     private ParsedMessage parseMessage(List<String> messages) {
         String messageType = null, prefix = null, lives = null, a = null;
         boolean readingPlayersSection = false, readingHistorySection = false;
@@ -307,6 +350,7 @@ public class ClientController {
         Map<String, Boolean> tempReadiness = new HashMap<>();
 
         for (String message : messages) {
+            // History Section
             if (message.equals("HISTORY_START")) { 
                 readingHistorySection = true; 
                 continue; 
@@ -317,6 +361,7 @@ public class ClientController {
                 continue; 
             }
 
+            // Players Section
             if (message.equals("PLAYERS_START")) { 
                 readingPlayersSection = true; 
                 continue; 
@@ -327,6 +372,7 @@ public class ClientController {
                 continue; 
             }
 
+            // If reading players section, get the name of the players and mark them as ready/not ready
             if (readingPlayersSection) {
                 if (message.startsWith("PLAYER:")) {
                     String[] playerStrParts = message.split(":", 4);
@@ -339,12 +385,14 @@ public class ClientController {
                 continue;
             }
 
+            // If reading history, add whole message to the history string
             if (readingHistorySection) {
                 historyString += message;
                 historyString += '\n';
                 continue;
             }
 
+            // Construct the actual object
             int idx = message.indexOf(':');
             if (idx > 0) {
                 String key = message.substring(0, idx).trim();
@@ -371,12 +419,15 @@ public class ClientController {
         return new ParsedMessage(messageType, prefix, lives, a, historyString, tempReadiness);
     }
 
+    // Handler for update of game
     private void handleStateUpdate(ParsedMessage parsedMessage) {
+
+        // Replacing old player ready map with new one
         playerReadiness.clear();
         playerReadiness.putAll(parsedMessage.playerReadiness);
 
         Platform.runLater(() -> {
-            if (parsedMessage.prefix == null || parsedMessage.prefix.isEmpty()) {
+            if (parsedMessage.prefix == null || parsedMessage.prefix.isEmpty()) { // No prefix
                 prefixLabel.setText( "-" );
             }
 
@@ -384,40 +435,29 @@ public class ClientController {
                 prefixLabel.setText(parsedMessage.prefix);
             }
 
-            if (parsedMessage.lives == null || parsedMessage.lives.isEmpty()) {
+            if (parsedMessage.lives == null || parsedMessage.lives.isEmpty()) { // No lives
                 livesLabel.setText("-");
             } else {
                 livesLabel.setText(parsedMessage.lives);
             }
 
-            if (parsedMessage.a == null || parsedMessage.a.isEmpty()) {
+            if (parsedMessage.a == null || parsedMessage.a.isEmpty()) { // No value
                 aLabel.setText("-");
             } else {
                 aLabel.setText(parsedMessage.a);
             }
 
             historyArea.setText(parsedMessage.history.trim());
+            historyArea.positionCaret(historyArea.getLength());
+
             updatePlayerList();
             updateUIState(parsedMessage.a, parsedMessage.prefix);
         });
     }
 
+    // Handle the start of a connection (for hint)
     private void handleConnectionWindow(List<String> messages) {
-        // Parse TIME from message block and start countdown if present
-        int timeSeconds = -1;
-        for (String m : messages) {
-            if (m.startsWith("TIME:")) {
-                try {
-                    timeSeconds = Integer.parseInt(m.substring(5).trim());
-                } catch (NumberFormatException e) {
-                    timeSeconds = -1;
-                }
-            }
-        }
-
-        if (timeSeconds > 0) {
-            startCountdown(timeSeconds);
-        }
+        handleHintStarted(messages);
 
         Platform.runLater(() -> {
             if ("B".equals(myRole)) {
@@ -429,31 +469,38 @@ public class ClientController {
         });
     }
 
+    // Handle the end of a connection (for a hint)
     private void handleConnectionEnd(List<String> messages) {
         stopCountdown();
         Platform.runLater(() -> {
-            guessBtnB.setDisable(true);
             guessBtn.setDisable(true);
+            guessBtnB.setDisable(true);
         });
     }
 
+    // Update timer to handle hint start
     private void handleHintStarted(List<String> messages) {
         int timeSeconds = -1;
-        for (String m : messages) {
-            if (m.startsWith("TIME:")) {
+
+        // Extract time
+        for (String message : messages) {
+            if (message.startsWith("TIME:")) {
                 try {
-                    timeSeconds = Integer.parseInt(m.substring(5).trim());
+                    String messageTime = message.substring(5).trim();
+                    timeSeconds = Integer.parseInt(messageTime);
                 } catch (NumberFormatException e) {
                     timeSeconds = -1;
                 }
             }
         }
 
+        // Set time
         if (timeSeconds > 0) {
             startCountdown(timeSeconds);
         }
     }
 
+    // Update UI if roles have been given
     private void givenRolesUpdateGUI(Boolean secretChosen, Boolean isA) {
         roleAPanel.setVisible(isA);
         roleAPanel.setManaged(isA);
@@ -486,6 +533,7 @@ public class ClientController {
         }
     }
 
+    // Update UI if roles have not been given
     private void notGivenRolesGUIUpdate(String ownName) {
         gamePanel.setVisible(false);
         gamePanel.setManaged(false);
@@ -499,6 +547,7 @@ public class ClientController {
             joined = true;
         }
 
+        // Disable ready button
         boolean disableReadyButton = false;
         if (!joined || playerReadiness.getOrDefault(ownName, false)) {
             disableReadyButton = true;
@@ -506,18 +555,19 @@ public class ClientController {
 
         readyBtn.setDisable(disableReadyButton);
 
+        // Set status text
         if (joined) {
             boolean amReady = false;
             if (playerReadiness.getOrDefault(ownName, false)) {
                 amReady = true;
             }
 
-            if (amReady) {
-                readyStatusLabel.setText("You are READY! Waiting for others...");
+            if (!amReady) {
+                readyStatusLabel.setText("Click Ready when you're ready to play");
             }
 
-            else {
-                readyStatusLabel.setText("Click Ready when you're ready to play");
+            else if (amReady) {
+                readyStatusLabel.setText("You are READY! Waiting for others...");
             }
 
         } else if (!ownName.isEmpty()) {
@@ -528,21 +578,25 @@ public class ClientController {
     private void updateUIState(String activePlayer, String currPrefix) {
         String ownName = nameField.getText().trim();
 
+        // Has the player been assigned roles
         boolean givenRoles = false;
         if (activePlayer != null && !activePlayer.isEmpty()) {
             givenRoles = true;
         }
 
+        // Is the player active
         boolean isA = false;
         if (givenRoles && activePlayer.equals(ownName)) {
             isA = true;
         }
 
+        // Has a secret been chosen
         boolean secretChosen = false;
         if ( currPrefix != null && !currPrefix.isEmpty() && !"-".equals(currPrefix) ) {
             secretChosen = true;
         }
         
+        // Assign role
         if (isA) {
             myRole = "A";
         } else if (givenRoles) {
@@ -551,6 +605,7 @@ public class ClientController {
             myRole = null;
         }
 
+        // Call appropriate function
         if (givenRoles) {
             givenRolesUpdateGUI(secretChosen, isA);
         }
@@ -560,6 +615,7 @@ public class ClientController {
         } 
     }
 
+    // Function to run in listener thread
     private void listenerThreadFunc() {
         try {
             String ln = in.readLine();
@@ -567,10 +623,10 @@ public class ClientController {
 
             while (isRunning && ln != null) {
 
-                if (!ln.trim().isEmpty()) {
+                if (!ln.trim().isEmpty()) { // non-empty message
                     list.add(ln);
-                } else {
-                    if (!list.isEmpty()) {
+                } else { // all messages have been added to list
+                    if (!list.isEmpty()) { // non-empty list
                         processMessage(list);
                         list.clear();
                     }
@@ -580,33 +636,39 @@ public class ClientController {
             }
         } catch (IOException e) {}
 
-        if (isRunning && !disconnected) {
-            attemptReconnectLoop();
+        if (!disconnected && isRunning) {
+            attemptReconnectLoop(); // launch reconnection thread 
         }
 
-        Platform.runLater(() -> statusLabel.setText("Disconnected"));
+        Platform.runLater(() -> statusLabel.setText("Disconnected")); // once done, set disabled
     }
 
+    // Starts thread to listen from server
     private void startListener() {
         listenerThread = new Thread(this::listenerThreadFunc, "listener");
         listenerThread.setDaemon(true);
         listenerThread.start();
     }
 
+    // Handle pressing connection button
     @FXML
     private void onConnect() {
-        if (isRunning) {
+        if (isRunning) { // if game is already running do nothing
             return;
         }
+
+        // Get host and port
         String host = hostField.getText().trim();
         String portText = portField.getText().trim();
         int port = Integer.parseInt(portText);
 
+        // Update host and port
         disconnected = false;
         prevHost = host;
         prevPort = port;
 
         try {
+            // Create socket and input/output streams
             socket = new Socket(host, port);
 
             InputStream socket_input = socket.getInputStream();
@@ -619,30 +681,34 @@ public class ClientController {
             isRunning = true;
 
             onConnect_GUIUpdate();
-            startListener();
+            startListener(); // start new thread to listen from server
 
         } catch (IOException e) {
             onConnectionFailure_GUIUpdate(e);
         }
     }
 
+    // Handle pressing disconnect button
     @FXML
     private void onDisconnect() {
+        closeSocket();
+
+        // Reset booleans
         disconnected = true;
         joined = false;
         isRunning = false;
 
-        resetConnectionButtons();
+        // Show status
         statusLabel.setText("Disconnected");
         statusLabel.setStyle("-fx-text-fill: #000000;");
 
-        closeSocket();
+        // Reset GUI
+        resetConnectionButtons();
+        lobbyPanel.setVisible(false);
+        lobbyPanel.setManaged(false);
 
         gamePanel.setVisible(false);
         gamePanel.setManaged(false);
-
-        lobbyPanel.setVisible(false);
-        lobbyPanel.setManaged(false);
 
         playerListArea.clear();
         readyStatusLabel.setText("");
@@ -656,54 +722,48 @@ public class ClientController {
         aLabel.setText("");
         historyArea.clear();
 
-        roleAPanel.setVisible(false);
-        roleAPanel.setManaged(false);
-
         roleBPanel.setVisible(false);
         roleBPanel.setManaged(false);
+
+        roleAPanel.setVisible(false);
+        roleAPanel.setManaged(false);
 
         hintPublicField.clear();
         hintIntendedField.clear();
         guessFieldB.clear();
 
+        nameField.setDisable(false);
         hostField.setDisable(false);
         portField.setDisable(false);
-        nameField.setDisable(false);
     }
 
-
+    // Handling pressing join button
     @FXML
     private void onJoin() {
         String name = nameField.getText().trim();
 
         if (!name.isEmpty()) {
-            send("TYPE:JOIN\nNAME:" + name);
-
-            joined = true;
             joinBtn.setDisable(true);
+            send("TYPE:JOIN\nNAME:" + name);
+            joined = true;
         }
     }
 
+    // Handle pressing ready
     @FXML
     private void onReady() {
         String name = nameField.getText().trim();
 
         if (name.isEmpty()) {
-            statusLabel.setText("Enter a name before readying");
             statusLabel.setStyle("-fx-text-fill: red;");
+            statusLabel.setText("Enter a name before readying");
             return;
         }
-
-        // if (!joined) {
-        // send("TYPE:JOIN\nNAME:" + name);
-
-        // joined = true;
-        // joinBtn.setDisable(true);
-        // }
 
         send("TYPE:READY");
     }
 
+    // Handle pressing set secret button
     @FXML
     private void onSetSecret() {
         String sec = secretField.getText().trim();
@@ -713,43 +773,57 @@ public class ClientController {
         }
     }
 
+    // Handle pressing guess button 
     @FXML
     private void onGuess() {
-        String guess = "";
+        TextField activeField = null;
         boolean wasChanged = false;
 
-        if ("A".equals(myRole)) {
-            guess = guessFieldA.getText().trim();
+        // Get guess field depending on role
+        if ("B".equals(myRole)) {
             wasChanged = true;
-        } else if ("B".equals(myRole)) {
-            guess = guessFieldB.getText().trim();
-            wasChanged = true;
+            activeField = guessFieldB;
         }
 
-        if (!wasChanged || guess.isEmpty()) {
+        else if ("A".equals(myRole)) {
+            wasChanged = true;
+            activeField = guessFieldA;
+        } 
+        
+        if (!wasChanged || activeField == null) {
             return;
         }
 
+        // Get actual guess
+        String guess = activeField.getText().trim();
+        if (guess.isEmpty()) {
+            return;
+        }
+        
         send("TYPE:SUBMIT_GUESS\nGUESS:" + guess);
     }
 
+
+    // Handle pressing submit hint button
     @FXML
     private void onStartHint() {
         String hint = hintPublicField.getText().trim();
         String intended = hintIntendedField.getText().trim();
 
-        if (hint.isEmpty() || intended.isEmpty()) {
+        if (hint.isEmpty() || intended.isEmpty()) { // Empty hints
             return;
         }
 
         send("TYPE:START_HINT\nHINT:" + hint + "\nINTENDED:" + intended);
     }
 
+    // Handle pressing connect button (for hint)
     @FXML
     private void onConnectAttempt() {
         send("TYPE:CONNECT");
     }
 
+    // Handle pressing quit button
     @FXML
     private void onQuit() {
         isRunning = false;
