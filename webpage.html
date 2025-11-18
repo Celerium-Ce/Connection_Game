@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Connection Game — Project Summary</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa7bf;--accent:#7dd3fc}
+    body{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;margin:0;padding:50px;background:linear-gradient(180deg,#071029 0%, #081022 100%);color:#e6eef8;line-height:1.9;}
+    .container{max-width:960px;margin:0 auto}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:24px}
+    h1{margin:0;font-size:28px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));border-radius:16px;padding:32px;box-shadow:0 8px 24px rgba(2,6,23,0.55);margin-bottom:32px;}
+    h2{margin-top:0}
+    pre{background:#061022;padding:12px;border-radius:8px;overflow:auto;color:var(--muted)}
+    code{font-family:monospace}
+    ul{line-height:2;margin-bottom:18px;}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .meta{display:flex;gap:12px;flex-wrap:wrap}
+    .field{display:flex;flex-direction:column}
+    input[type=text]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    a.button{display:inline-block;padding:8px 12px;border-radius:8px;background:rgba(125,211,252,0.12);color:var(--accent);text-decoration:none}
+    footer{color:var(--muted);font-size:13px;margin-top:18px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Connection Game — Project Summary</h1>
+        <div style="color:var(--muted);font-size:14px">A short, shareable webpage describing the rules, codebase and networking details.</div>
+      </div>
+    </header>
+
+    <section class="card" id="rules">
+      <h2>Rules</h2>
+      <ol>
+        <li>Number of players: <strong>N ≥ 3</strong>. One player is the clue-giver (A). The remaining N−1 players form a team (B).</li>
+        <li>A chooses a hidden word <strong>W</strong> and submits it to the game server. The server stores W privately for A.</li>
+        <li>A reveals the first letter of W. The known prefix is <strong>X</strong> (initially the first letter).</li>
+        <li>Team B has <strong>5 lives</strong> for each prefix X. If X extends by 1 letter, lives reset to 5.</li>
+        <li>Gameplay loop:
+          <ul>
+            <li>Any B member (b1) has <strong>60s</strong> to give a descriptive hint (phrase/word) that points to a target word Z which starts with the prefix X.</li>
+            <li>Another B member (b2) can press <em>Connection</em> if they think b1's hint points to Z. This triggers a <strong>10s</strong> secret-guess window for b2 and A.</li>
+            <li>During the 10s window both b2 and A submit guesses privately. If A correctly identifies Z, B loses one life for the current X.</li>
+            <li>If b2 correctly guessed Z and A did not, connection succeeds and A reveals the next letter of W (X grows by 1). Lives reset to 5.</li>
+            <li>If connection fails and either b1 or b2 happened to guess W exactly then B immediately wins.</li>
+            <li>If B loses all 5 lives on a prefix X (A guessed 5 hints correctly), A wins the round.</li>
+          </ul>
+        </li>
+        <li>End conditions:
+          <ul>
+            <li>B wins if full W is revealed or someone explicitly guesses W.</li>
+            <li>A wins if B runs out of 5 lives on the same prefix X.</li>
+          </ul>
+        </li>
+      </ol>
+    </section>
+
+    <section class="card" id="directory">
+      <h2>Project Directory</h2>
+      <p>The repository follows the exact layout from your screenshot. Place source files under <code>src/</code>.</p>
+      <pre><code>src/
+├─ client/
+│  ├─ client.fxml
+│  ├─ ClientController.java
+│  ├─ GuiClient.java
+│  └─ ParsedMessage.java
+├─ server/
+│  ├─ ClientHandler.java
+│  ├─ GameServer.java
+│  ├─ GameState.java
+│  ├─ Message.java
+│  └─ TimerManager.java
+└─ README.md
+</code></pre>
+    </section>
+
+    <section class="card" id="file-explanations">
+      <h2>Files &amp; What they do </h2>
+      <div class="two-col">
+        <div>
+          <h3>server/</h3>
+          <ul>
+            <li><strong>GameServer.java</strong>
+              <div class="meta">Main server process. Responsibilities:
+                <ul>
+                  <li>Open a <code>ServerSocket</code> and accept client connections.</li>
+                  <li>Spawn a <code>ClientHandler</code> thread for each connected client.</li>
+                  <li>Maintain authoritative <code>GameState</code> and broadcast updates to clients.</li>
+                </ul>
+              </div>
+            </li>
+
+            <li><strong>ClientHandler.java</strong>
+              <div class="meta">Per-client worker that:
+                <ul>
+                  <li>Reads raw messages from the client's socket and converts them into <code>Message</code> objects.</li>
+                  <li>Handles client actions (submit-word, hint, press-connection, secret-guess, guess-W) and applies server-side validation.</li>
+                  <li>Sends state updates, timer events and reveal messages back to the client.</li>
+                </ul>
+              </div>
+            </li>
+
+            <li><strong>TimerManager.java</strong>
+              <div class="meta">Centralized timer utility used by the server for:
+                <ul>
+                  <li>60s hint window (starts when a hint is posted).</li>
+                  <li>10s secret-guess window (after connection press).</li>
+                  <li>Per-prefix life tracking and scheduling tasks to trigger life loss / reveal next letter.</li>
+                </ul>
+              </div>
+            </li>
+
+            <li><strong>Message.java</strong>
+              <div class="meta">Server-side protocol object (used when reading raw socket input). Typical fields:
+                <ul>
+                  <li><code>type</code> (e.g., HINT, CONNECTION, SECRET_GUESS, SUBMIT_WORD, UPDATE_STATE)</li>
+                  <li><code>from</code> (player id or name)</li>
+                  <li><code>payload</code> (map or JSON string)</li>
+                </ul>
+              </div>
+            </li>
+
+            <li><strong>GameState.java</strong>
+              <div class="meta">Authoritative game model: stores the current prefix <strong>X</strong>, the hidden word's length, revealed letters, current lives left, player list and roles. Server methods include:
+                <ul>
+                  <li><code>revealNextLetter()</code>, <code>decrementLife()</code>, <code>resetLives()</code>, <code>checkWin()</code>.</li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3>client/</h3>
+          <ul>
+            <li><strong>GuiClient.java</strong>
+              <div class="meta">Client-side UI implementation (JavaFX in your repo). Responsibilities:
+                <ul>
+                  <li>Render the game: current prefix X, lives left, hint input, Connection button, chat/log and countdown timers.</li>
+                  <li>Handle UI events and call <code>ClientController</code> for network operations.</li>
+                </ul>
+              </div>
+            </li>
+
+            <li><strong>ClientController.java</strong>
+              <div class="meta">Networking layer for the client:
+                <ul>
+                  <li>Maintain a persistent <code>Socket</code> to the server and send/receive <code>Message</code> JSONs.</li>
+                  <li>Expose methods like <code>sendHint()</code>, <code>pressConnection()</code>, <code>submitSecretGuess()</code>, and <code>submitWord()</code> for the UI to call.</li>
+                </ul>
+              </div>
+            </li>
+
+            <li><strong>ParsedMessage.java</strong>
+              <div class="meta">Client-side helper that converts raw <code>Message</code> payloads into richer objects for the UI (helpers like <code>isUpdate()</code>, <code>getRemainingTime()</code>).</div>
+            </li>
+
+          </ul>
+        </div>
+      </div>
+
+      <p style="margin-top:10px;color:var(--muted)">Note: There is no separate <code>shared/</code> folder in the repository — protocol classes are split: <code>Message.java</code> lives in <code>server/</code> (server consumption) and <code>ParsedMessage.java</code> is the client-side convenience object. If you prefer a shared module, we can move common DTOs into <code>src/shared/</code>.</p>
+    </section>
+
+    <section class="card" id="networking">
+      <h2>Networking</h2>
+      <p>The project uses a classic client–server architecture with TCP sockets. High-level networking notes:</p>
+      <ul>
+        <li><strong>Transport:</strong> Java <code>ServerSocket</code> on the server and <code>Socket</code> on the client. Each client connection is handled concurrently by a <code>ClientHandler</code> thread.</li>
+        <li><strong>Protocol:</strong> Small JSON messages or a lightweight line-based protocol. Message envelope contains <code>type</code>, <code>from</code> and a <code>payload</code>.</li>
+        <li><strong>Authority:</strong> Server holds the canonical <code>GameState</code>. Clients only send action requests and the server validates and broadcasts resulting state changes.</li>
+        <li><strong>Timers:</strong> Timers run server-side (via <code>TimerManager</code>) to prevent client tampering. The server sends countdown updates for UI display.</li>
+        <li><strong>Secret guesses:</strong> Submitted privately to the server; the server holds them until the 10s window ends and then resolves the result.</li>
+      </ul>
+    </section>
+
+    <section class="card" id="demo-github">
+      <h2>Demo &amp; Repository</h2>
+      <p>Demo video (placeholder): <a class="button" href="#">Watch demo video</a></p>
+      <p>GitHub repo (placeholder): <a class="button" href="#">Open GitHub repository</a></p>
+    </section>
+
+    <section class="card" id="team">
+      <h2>Team</h2>
+      <p style="line-height:1.8; font-size:15px;">
+        <strong>Mayank Kumar</strong><br>
+        <strong>Md. Umar</strong><br>
+        <strong>Pratyush Gangwar</strong><br>
+        <strong>Saanvi Singh</strong><br>
+        <strong>Ujjval Dargar</strong>
+      </p>
+    </section>
+
+    <footer>
+      This summary is intended to be a single-file project overview that can be placed in <code>src/README.md</code> inside your repository. Edit any of the placeholders (demo link, GitHub URL) before sharing.
+    </footer>
+  </div>
+
+  <script>
+    function saveTeam(){
+      const v = document.getElementById('teamNames').value.trim();
+      document.getElementById('saved').textContent = v ? 'Saved: ' + v : 'No names entered';
+    }
+  </script>
+</body>
+</html>
