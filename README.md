@@ -1,5 +1,4 @@
-# CN_Project_G26
-# Connection Game — Project Summary
+# Connection Game 
 
 ## Idea
 A deduction and word-association game where one player tries to hide a word while rest collaborate, give hint, and form connections to reveal next character.
